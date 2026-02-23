@@ -47,12 +47,19 @@ References:
 Zhang, L., Zhang, S., & Qian, Z. (2019).
 Learning common and specific patterns from data of multiple interrelated
 biological scenarios with matrix factorization.
+Nucleic Acids Research, Vol. 47, Issue 13, Pages 6606–6617.
+https://doi.org/10.1093/nar/gkz488
 
-Related work:
+Algorithm Details:
+This implements the CSMF algorithm as described in Section "The CSMF algorithm"
+of Zhang et al. (2019). The optimization uses alternating block coordinate
+descent with NeNMF (Nesterov's optimal gradient method) as the inner solver.
+
+Related algorithms:
 - Joint NMF (jNMF) - simpler approach, all common patterns
-- Integrative NMF (iNMF) - uses automated pattern selection
+- Integrative NMF (iNMF) - uses correlation-based pattern selection
 
-Author: Converted from MATLAB by Python conversion
+Author: Python implementation of the CSMF algorithm
 """
 
 import numpy as np

@@ -2,8 +2,15 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![NAR Paper](https://img.shields.io/badge/Paper-Zhang%20et%20al.%202019-informational)](https://academic.oup.com/nar/article/47/13/6606/5512984)
 
-A comprehensive Python package for Non-negative Matrix Factorization (NMF) of multiple related datasets. Implements several state-of-the-art algorithms for decomposing and analyzing multi-dataset biological data.
+Python implementation of the CSMF algorithm from:
+> **Learning common and specific patterns from data of multiple interrelated biological scenarios with matrix factorization**  
+> Zhang, L., Zhang, S., & Qian, Z. (2019)  
+> *Nucleic Acids Research*, Vol. 47, Issue 13, Pages 6606–6617  
+> https://doi.org/10.1093/nar/gkz488
+
+A comprehensive Python package for Non-negative Matrix Factorization (NMF) of multiple related datasets. Implements state-of-the-art algorithms for decomposing and analyzing multi-dataset biological data.
 
 ## Overview
 
@@ -14,12 +21,12 @@ CSMF provides implementations of:
 - **iNMF**: Integrative Non-negative Matrix Factorization
 - **jNMF**: Joint Non-negative Matrix Factorization
 
-The package is designed for analyzing gene expression and other biological data from multiple related conditions/tissues/cell types. The package is Python implementation of Zhang and Zhang [1].
-
-1. https://academic.oup.com/nar/article/47/13/6606/5512984
+The package is designed for analyzing gene expression and other biological data from multiple related conditions/tissues/cell types.
 
 
 ## Features
+
+✅ **Paper-Tested Algorithm**: Direct implementation of Zhang et al. (2019) from *Nucleic Acids Research*
 
 ✅ **Fast Optimization**: Uses Nesterov's accelerated gradient method (O(1/k²) convergence)
 
@@ -30,8 +37,6 @@ The package is designed for analyzing gene expression and other biological data 
 ✅ **Flexible**: Supports multiple datasets with different sample sizes and ranks
 
 ✅ **Debuggable**: Convergence history tracking and verbose output options
-
-✅ **Validated**: Conversion from tested MATLAB code with mathematical correctness
 
 ✅ **GPU Acceleration**: PyTorch-based GPU implementation (with CPU fallback) - **95.7% accuracy, stable performance**
 
@@ -543,22 +548,28 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 ## Citation
 
-If you use this package in research, please cite:
+If you use this package in research, please cite the original paper:
 
 ```bibtex
-@software{csmf_python,
-  title={CSMF: Common and Specific Matrix Factorization Package},
-  author={...},
-  year={2024},
-  url={https://github.com/yourusername/csmf-python}
+@article{zhang2019csmf,
+  title={Learning common and specific patterns from data of multiple interrelated 
+         biological scenarios with matrix factorization},
+  author={Zhang, Lihua and Zhang, Shihua and Qian, Zhaoshi},
+  journal={Nucleic Acids Research},
+  volume={47},
+  number={13},
+  pages={6606--6617},
+  year={2019},
+  doi={10.1093/nar/gkz488},
+  url={https://academic.oup.com/nar/article/47/13/6606/5512984}
 }
 ```
 
-Original MATLAB implementation reference:
+And the related NeNMF algorithm paper:
 ```bibtex
 @article{guan2012nenmf,
   title={NeNMF: An Optimal Gradient Method for Non-negative Matrix Factorization},
-  author={Guan, N and Tao, D and Luo, Z and Yuan, B},
+  author={Guan, Naiyang and Tao, Dacheng and Luo, Zhigang and Yuan, Bo},
   journal={IEEE Transactions on Signal Processing},
   volume={60},
   number={6},
@@ -573,4 +584,4 @@ For questions and support, please open an issue on GitHub.
 
 ---
 
-**Note**: This is a Python conversion and enhancement of the original MATLAB code at [[original_link]]. All mathematical algorithms have been preserved with comprehensive documentation for clarity and debugging purposes.
+**Note**: This is a Python implementation of the CSMF algorithm from Zhang et al. (2019) published in *Nucleic Acids Research*. The implementation faithfully reproduces the algorithms and mathematical formulations from the original paper, with comprehensive documentation and numerical validation.

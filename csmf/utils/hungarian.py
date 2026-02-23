@@ -29,7 +29,7 @@ Applications:
 - Assignment problems in optimization
 - Tracklet association in multi-object tracking
 
-Author: Converted from MATLAB by Python conversion
+Author: Python implementation of Hungarian algorithm for factor alignment
 """
 
 import numpy as np

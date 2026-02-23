@@ -44,7 +44,13 @@ IEEE Transactions on Signal Processing, Vol. 60, No. 6, pp. 2882-2898.
 Nesterov, Y. (1983). "A method for unconstrained convex minimization problem
 with the rate of convergence O(1/k²)"
 
-Author: Converted from MATLAB by Python conversion
+Zhang, L., Zhang, S., & Qian, Z. (2019).
+"Learning common and specific patterns from data of multiple interrelated
+biological scenarios with matrix factorization"
+Nucleic Acids Research, Vol. 47, Issue 13, Pages 6606–6617.
+https://doi.org/10.1093/nar/gkz488
+
+Author: Python implementation of NeNMF algorithm
 """
 
 import numpy as np

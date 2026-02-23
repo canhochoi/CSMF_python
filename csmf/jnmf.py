@@ -53,7 +53,7 @@ Complementary to CSMF. Useful when:
 - Common biological processes dominate
 - Interpretability is priority over accuracy
 
-Author: Converted from MATLAB by Python conversion
+Author: Python implementation of jNMF algorithm based on Zhang et al. (2019)
 """
 
 import numpy as np

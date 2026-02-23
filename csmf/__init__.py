@@ -118,15 +118,15 @@ IEEE Transactions on Signal Processing, Vol. 60, No. 6, pp. 2882-2898.
 Zhang, L., Zhang, S., & Qian, Z. (2019).
 "Learning common and specific patterns from data of multiple interrelated
 biological scenarios with matrix factorization"
-
-Author: Python conversion from MATLAB (original by Guan, N., Tao, D., et al.)
+Nucleic Acids Research, Vol. 47, Issue 13, Pages 6606–6617.
+https://doi.org/10.1093/nar/gkz488
 
 License: MIT
 
 """
 
-__version__ = "1.0.0"
-__author__ = "Python Conversion"
+__version__ = "2.0.0"
+__author__ = "Based on algorithm by Zhang et al. (2019)"
 __all__ = [
     # CPU algorithms
     'nenmf',

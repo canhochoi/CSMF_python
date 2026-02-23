@@ -22,7 +22,7 @@ Different stopping criteria measure convergence differently:
 2. Normalized Projected Gradient Norm: ||PG|| / |support(PG)|
 3. Normalized KKT Residual: L1-norm of KKT violation / count of violations
 
-Author: Converted from MATLAB by Python conversion
+Author: Python implementation of stopping criteria
 Reference: Lin, C. J. (2007). Projected gradient methods for nonnegative matrix factorization
 """
 

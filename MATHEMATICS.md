@@ -424,6 +424,6 @@ Track these quantities:
 
 ---
 
-**Last Updated:** 2024
+**Last Updated:** 2026
 
 For more details on specific functions, see the docstrings in source code.

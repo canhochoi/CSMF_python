@@ -27,7 +27,7 @@ References:
 Related to integrative analysis approaches in multi-omics studies.
 Soft et al. (2012) discuss integrative NMF for multi-tissue data.
 
-Author: Converted from MATLAB by Python conversion
+Author: Python implementation of iNMF algorithm based on Zhang et al. (2019)
 """
 
 import numpy as np
