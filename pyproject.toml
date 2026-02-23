@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "Python Conversion", email = ""}
+    {name = "Luan Q. Le"}
 ]
 keywords = ["matrix-factorization", "NMF", "multi-dataset", "bioinformatics"]
 classifiers = [
