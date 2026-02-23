@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csmf"
+version = "1.0.0"
+description = "Common and Specific Matrix Factorization for multi-dataset analysis"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Python Conversion", email = ""}
+]
+keywords = ["matrix-factorization", "NMF", "multi-dataset", "bioinformatics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "numpy>=1.19.0",
+    "scipy>=1.5.0",
+    "scikit-learn>=0.24.0",
+    "matplotlib>=3.3.0",
+]
+
+[project.optional-dependencies]
+gpu = ["torch>=1.9.0"]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "black>=20.8b1",
+    "flake8>=3.8",
+]
+docs = [
+    "sphinx>=3.0",
+    "sphinx-rtd-theme>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/csmf-python"
+Documentation = "https://github.com/yourusername/csmf-python"
+Repository = "https://github.com/yourusername/csmf-python"
+Issues = "https://github.com/yourusername/csmf-python/issues"
+
+[tool.setuptools]
+packages = ["csmf"]
+
+[tool.setuptools.package-data]
+csmf = ["py.typed"]
