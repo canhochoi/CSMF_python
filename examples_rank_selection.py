@@ -349,7 +349,6 @@ def run_svd_pipeline_example():
     
     vec_para, analysis = rank_selection_svd_pipeline(
         X_datasets,
-        correlations_cutoff=0.75,
         verbose=1
     )
 
@@ -358,8 +357,10 @@ def run_svd_pipeline_example():
 
     # Explain the decomposition
     print(f"\n  Rank Decomposition Explanation:")
-    print(f"    - Per-dataset initial optimal ranks (from SVD elbow): {list(analysis['optimal_ranks'].values())}")
-    print(f"    - Final decomposition: {vec_para}")
+    print(f"    - Common rank (from stacked-scores SVD, threshold={analysis['threshold']:.2f}): {analysis['r_common']}")
+    print(f"    - Per-dataset total ranks (from per-dataset SVD elbow): {list(analysis['optimal_ranks'].values())}")
+    print(f"    - Specific ranks = total - common: {vec_para[1:]}")
+    print(f"    - Final: {vec_para}")
     # Guard against common rank of 0
     if vec_para[0] == 0:
         print("\n  WARNING: Common rank is 0 - no correlated factors detected.")
@@ -377,14 +378,36 @@ def run_svd_pipeline_example():
     print("\n" + "-"*70)
     print("Step 3: Creating SVD validation plots...")
 
-    # Plot scree plots
-    fig, axes = plt.subplots(1, len(X_datasets), figsize=(15, 4))
-    fig.suptitle("SVD Scree Plots for Initial Rank Estimation", fontsize=14, fontweight='bold')
-    for i, (singular_values, elbow) in enumerate(zip(analysis['singular_values'].values(), analysis['optimal_ranks'].values())):
-        ax = axes[i]
-        ax.plot(range(1, len(singular_values) + 1), singular_values, 'b-o', label='Singular Values')
-        ax.axvline(elbow, color='r', linestyle='--', label=f'Detected Elbow: {elbow}')
-        ax.set_title(f'Dataset {i+1}')
+    # Plot scree plots: first subplot = stacked scores (common rank), rest = per-dataset
+    n_plots = 1 + len(X_datasets)
+    fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 4))
+    fig.suptitle("SVD Scree Plots for Rank Estimation", fontsize=14, fontweight='bold')
+
+    # Stacked-scores SVD plot (common rank)
+    ax = axes[0]
+    s_stack = analysis['singular_values_stack']
+    n_show = min(len(s_stack), 20)
+    ax.plot(range(1, n_show + 1), s_stack[:n_show], 'g-o', label='Singular Values')
+    ax.axhline(analysis['threshold'], color='orange', linestyle='--',
+               label=f'Threshold (1+√K)/2={analysis["threshold"]:.2f}')
+    ax.axvline(analysis['r_common'], color='r', linestyle='--',
+               label=f'Common rank: {analysis["r_common"]}')
+    ax.set_title('Stacked Scores (Common Rank)')
+    ax.set_xlabel('Component')
+    ax.set_ylabel('Singular Value')
+    ax.grid(True, alpha=0.4)
+    ax.legend(fontsize=8)
+
+    # Per-dataset scree plots (total rank per dataset)
+    for i, (singular_values, total_rank) in enumerate(zip(
+            analysis['singular_values'].values(), analysis['optimal_ranks'].values())):
+        ax = axes[i + 1]
+        n_show = min(len(singular_values), 20)
+        ax.plot(range(1, n_show + 1), singular_values[:n_show], 'b-o', label='Singular Values')
+        ax.axvline(total_rank, color='r', linestyle='--',
+                   label=f'Total rank: {total_rank}')
+        r_s = vec_para[i + 1]
+        ax.set_title(f'Dataset {i+1}\n(common={analysis["r_common"]} + specific={r_s})')
         ax.set_xlabel('Component')
         ax.set_ylabel('Singular Value')
         ax.grid(True, alpha=0.4)

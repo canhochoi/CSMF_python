@@ -1,24 +1,19 @@
 """
 Rank Selection via SVD Scree Plot Analysis
 
-This module provides an alternative rank selection pipeline based on Singular
-Value Decomposition (SVD). The core idea is to identify the "elbow" in the
-scree plot of singular values, which indicates the transition from signal to
-noise.
-
 Workflow:
-1.  For each data block, compute its SVD.
-2.  Find the "elbow" in the scree plot of singular values to determine the
-    initial optimal rank for that block.
-3.  Run NMF at these optimal ranks to get the factor matrices (W).
-4.  Use the same correlation-based method as the MATLAB implementation to
-    decompose the initial ranks into common and specific parts.
+1.  SVD each dataset → per-dataset total rank r_k (elbow of scree plot)
+    and score subspace U_k (n × r_k orthonormal columns).
+2.  Stack score subspaces: U_stack = [U_1 | U_2 | ... | U_K] (n × Σr_k).
+    SVD of U_stack: joint directions appear in all K blocks → singular value ≈ √K.
+    Individual directions appear in only one block → singular value ≈ 1.
+    Common rank r_J = number of singular values ≥ (1 + √K) / 2.
+3.  Specific rank for dataset k = max(r_k - r_J, 1).
+4.  Return vec_para = [r_J, r_specific_1, ..., r_specific_K].
 """
 
 import numpy as np
 from typing import List, Dict, Tuple
-from csmf.nenmf import nenmf as nmf
-from csmf.utils.rank_selection import learn_common_specific_ranks_from_correlations
 
 
 def find_elbow(y: np.ndarray) -> int:
@@ -47,18 +42,18 @@ def find_elbow(y: np.ndarray) -> int:
 
 def rank_selection_svd_pipeline(
     X_datasets: List[np.ndarray],
-    correlations_cutoff: float = 0.75,
     verbose: int = 1
 ) -> Tuple[List[int], Dict]:
     """
     Complete rank selection pipeline using SVD elbow analysis.
 
+    Common rank is detected by SVD of the horizontally concatenated matrix.
+    Specific ranks are detected by SVD of each individual dataset.
+
     Parameters
     ----------
     X_datasets : List[np.ndarray]
-        List of data matrices for each dataset.
-    correlations_cutoff : float
-        Threshold for common factor identification.
+        List of data matrices for each dataset (shape: n_features × n_samples).
     verbose : int
         Verbosity level.
 
@@ -67,7 +62,7 @@ def rank_selection_svd_pipeline(
     vec_para : List[int]
         [r_common, r_specific_1, ..., r_specific_K]
     analysis : Dict
-        Detailed analysis including singular values and optimal ranks.
+        Detailed analysis including singular values and detected ranks.
     """
     if verbose >= 1:
         print("=" * 70)
@@ -75,49 +70,57 @@ def rank_selection_svd_pipeline(
         print("=" * 70)
 
     num_datasets = len(X_datasets)
+    K = num_datasets
     singular_values_all = {}
     optimal_ranks = {}
+    score_subspaces = {}
 
-    # Step 1: SVD and Elbow Detection for each dataset
+    # Step 1: SVD per dataset → per-dataset total rank and score subspace
     if verbose >= 1:
-        print("\nStep 1: SVD and Elbow Detection per dataset...")
+        print("\nStep 1: SVD per dataset → per-dataset total rank...")
 
     for i in range(num_datasets):
-        U, s, Vt = np.linalg.svd(X_datasets[i], full_matrices=False)
+        U, s, _ = np.linalg.svd(X_datasets[i], full_matrices=False)
         singular_values_all[i] = s
-        
-        # Find elbow to determine initial rank
-        # We consider a max of 20 ranks for elbow detection
-        max_rank_to_consider = min(len(s), 20)
-        initial_rank = find_elbow(s[:max_rank_to_consider])
-        optimal_ranks[i] = initial_rank
-        
+        max_rank_k = min(len(s), 20)
+        r_k = find_elbow(s[:max_rank_k])
+        optimal_ranks[i] = r_k
+        score_subspaces[i] = U[:, :r_k]   # n × r_k orthonormal scores
         if verbose >= 1:
-            print(f"  Dataset {i+1}: Found elbow at rank={initial_rank}")
+            print(f"  Dataset {i+1}: total rank (elbow) = {r_k}")
 
-    # Step 2: Run NMF at optimal ranks to get W matrices
+    # Step 2: Stack score subspaces → common rank
+    # Joint directions appear in all K blocks  → singular value ≈ √K
+    # Individual directions appear in one block → singular value ≈ 1
+    # Threshold = (1 + √K) / 2 cleanly separates the two groups.
     if verbose >= 1:
-        print("\nStep 2: Running NMF at optimal ranks...")
-    
-    W_matrices = []
+        print("\nStep 2: Stacking score subspaces → common rank...")
+
+    U_stack = np.hstack([score_subspaces[i] for i in range(num_datasets)])
+    _, s_stack, _ = np.linalg.svd(U_stack, full_matrices=False)
+    threshold = (1.0 + np.sqrt(K)) / 2
+    r_common = int(np.sum(s_stack >= threshold))
+    r_common = max(r_common, 1)
+
+    if verbose >= 1:
+        print(f"  Stacked scores shape: {U_stack.shape}")
+        print(f"  Threshold (1+√{K})/2 = {threshold:.3f}")
+        print(f"  Singular values of stacked scores (top {min(len(s_stack), 15)}): "
+              f"{np.round(s_stack[:min(len(s_stack), 15)], 3).tolist()}")
+        print(f"  Common rank (values ≥ threshold): {r_common}")
+
+    # Step 3: Specific rank = max(per-dataset rank - common rank, 1)
+    if verbose >= 1:
+        print("\nStep 3: Computing specific ranks...")
+
+    r_specific = []
     for i in range(num_datasets):
-        opt_rank = optimal_ranks[i]
-        W, H, _, _, _ = nmf(X_datasets[i], r=opt_rank)
-        
-        # Normalize W for correlation analysis
-        W_norm = W / (np.linalg.norm(W, axis=0, keepdims=True) + 1e-10)
-        W_matrices.append(W_norm)
-        
+        r_s = max(optimal_ranks[i] - r_common, 1)
+        r_specific.append(r_s)
         if verbose >= 1:
-            print(f"  Dataset {i+1}: NMF at rank={opt_rank}, W shape={W.shape}")
+            print(f"  Dataset {i+1}: {optimal_ranks[i]} (total) - {r_common} (common) = {r_s} (specific)")
 
-    # Step 3: Learn common/specific ranks from correlations
-    if verbose >= 1:
-        print("\nStep 3: Learning common/specific ranks...")
-
-    vec_para = learn_common_specific_ranks_from_correlations(
-        W_matrices, correlations_cutoff, verbose=verbose
-    )
+    vec_para = [r_common] + r_specific
 
     if verbose >= 1:
         print("\n" + "=" * 70)
@@ -126,8 +129,10 @@ def rank_selection_svd_pipeline(
 
     analysis = {
         'singular_values': singular_values_all,
+        'singular_values_stack': s_stack,
         'optimal_ranks': optimal_ranks,
-        'W_matrices': W_matrices,
+        'r_common': r_common,
+        'threshold': threshold,
     }
 
     return vec_para, analysis
