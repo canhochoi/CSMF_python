@@ -15,6 +15,11 @@ import time
 from .config import GPUConfig
 from .utils import ensure_torch_tensor, ensure_numpy_array, SparseMatrixHandler
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
+
 
 class GPUNeNMFSolver:
     """
@@ -94,7 +99,7 @@ class GPUNeNMFSolver:
                     break
         
         return H
-    
+
     def nmf(
         self,
         V: Union[np.ndarray, sp.csr_matrix, torch.Tensor],
@@ -105,6 +110,7 @@ class GPUNeNMFSolver:
         w_init: Optional[np.ndarray] = None,
         h_init: Optional[np.ndarray] = None,
         verbose: bool = False,
+        progress: bool = False,
         return_history: bool = False
     ) -> Union[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, Dict]]:
         """
@@ -155,7 +161,8 @@ class GPUNeNMFSolver:
         V_data = ensure_torch_tensor(V, self.device)
         m, n = V_data.shape
         
-        frobenius_norm_V = torch.norm(V_data, 'fro').item()
+        frobenius_norm_V = torch.norm(V_data, 'fro')
+        frobenius_norm_V_sq = frobenius_norm_V.pow(2)
         
         # Initialize W and H with float32
         if w_init is not None:
@@ -175,12 +182,23 @@ class GPUNeNMFSolver:
         history = {'rel_error': [], 'times': []}
         
         # Adaptive tolerance like CPU version
-        initial_error = torch.norm(V_data - W @ H, 'fro') / frobenius_norm_V
+        HHt = H @ H.T
+        WtW = W.T @ W
+        WtV = W.T @ V_data
+        recon_norm_sq = torch.sum(WtW * HHt)
+        dot = torch.sum(WtV * H)
+        residual_norm_sq = frobenius_norm_V_sq + recon_norm_sq - 2.0 * dot
+        residual_norm_sq = torch.clamp(residual_norm_sq, min=0.0)
+        initial_error = torch.sqrt(residual_norm_sq) / frobenius_norm_V
         tol_inner_h = max(tol, 1e-3) * initial_error.item()
         tol_inner_w = tol_inner_h
         
         # Main NMF loop with Nesterov acceleration for each factor
-        for iteration in range(max_iter):
+        use_progress_bar = progress and tqdm is not None
+        progress_bar = tqdm(range(max_iter), desc="NMF iterations", leave=False) if use_progress_bar else None
+        iterator = progress_bar if progress_bar is not None else range(max_iter)
+
+        for iteration in iterator:
             # Optimize H with W fixed using Nesterov NNLS
             WtW = W.T @ W
             WtV = W.T @ V_data
@@ -206,13 +224,22 @@ class GPUNeNMFSolver:
             
             # Check convergence every 10 iterations
             if (iteration + 1) % 10 == 0 or iteration < min_iter:
-                recon_error = torch.norm(V_data - W @ H, 'fro')
+                HHt = H @ H.T
+                WtW = W.T @ W
+                WtV = W.T @ V_data
+                recon_norm_sq = torch.sum(WtW * HHt)
+                dot = torch.sum(WtV * H)
+                residual_norm_sq = frobenius_norm_V_sq + recon_norm_sq - 2.0 * dot
+                residual_norm_sq = torch.clamp(residual_norm_sq, min=0.0)
+                recon_error = torch.sqrt(residual_norm_sq)
                 error = (recon_error / frobenius_norm_V).item()
                 
                 history['rel_error'].append(error)
                 history['times'].append(time.time() - start_time)
                 
-                if verbose and ((iteration + 1) % 10 == 0):
+                if progress_bar is not None:
+                    progress_bar.set_postfix(rel_error=f"{error:.6e}")
+                elif verbose and ((iteration + 1) % 10 == 0):
                     print(f"Iter {iteration + 1:4d}: rel_error = {error:.6e}")
                 
                 # Early stopping based on relative error change
@@ -232,6 +259,9 @@ class GPUNeNMFSolver:
         W_np = np.clip(W_np, 1e-6, None)
         H_np = np.clip(H_np, 1e-6, None)
         
+        if progress_bar is not None:
+            progress_bar.close()
+
         if return_history:
             return W_np, H_np, history
         else:

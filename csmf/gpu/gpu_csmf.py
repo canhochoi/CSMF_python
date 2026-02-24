@@ -14,6 +14,11 @@ from .config import GPUConfig
 from .gpu_nenmf import GPUNeNMFSolver
 from .utils import ensure_numpy_array, ensure_torch_tensor
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
+
 
 class GPUCSMFSolver:
     """
@@ -35,7 +40,9 @@ class GPUCSMFSolver:
         n_iter_outer: int = 50,
         n_iter_inner: int = 50,
         tol: float = 1e-6,
-        verbose: int = 0
+        verbose: int = 0,
+        show_progress: bool = False,
+        show_progress_inner: bool = False
     ) -> Dict:
         """
         Fit CSMF model to multiple datasets.
@@ -57,6 +64,10 @@ class GPUCSMFSolver:
             Convergence tolerance
         verbose : int
             Verbosity level (0, 1, or 2)
+        show_progress : bool
+            Whether to show the outer CSMF tqdm progress bar (requires `tqdm`)
+        show_progress_inner : bool
+            Whether to show the inner NMF tqdm progress bar inside each update (requires `tqdm`)
             
         Returns
         -------
@@ -100,7 +111,11 @@ class GPUCSMFSolver:
         history = {'obj': [], 'time': []}
         
         # Main CSMF loop
-        for outer_iter in range(n_iter_outer):
+        use_outer_bar = show_progress and tqdm is not None
+        outer_bar = tqdm(range(n_iter_outer), desc="CSMF outer", leave=False) if use_outer_bar else None
+        outer_iterator = outer_bar if outer_bar is not None else range(n_iter_outer)
+
+        for outer_iter in outer_iterator:
             iter_start = time.time()
             
             # Step 1: Update common components
@@ -124,7 +139,8 @@ class GPUCSMFSolver:
             
             # Factorize concatenated residuals (with proper initialization like CPU)
             W_c, Hc_concat = self.nmf_solver.nmf(
-                CX, rank=rank_common, max_iter=n_iter_inner, verbose=False,
+                CX, rank=rank_common, max_iter=n_iter_inner,
+                verbose=bool(verbose), progress=show_progress_inner,
                 w_init=W_c, h_init=Hc_concat  # PASS PREVIOUS SOLUTIONS
             )
             
@@ -152,7 +168,8 @@ class GPUCSMFSolver:
                 H_s_prev = H_s_list[k]
                 
                 W_s_k, H_s_k = self.nmf_solver.nmf(
-                    residual, rank=rank_specific[k], max_iter=n_iter_inner, verbose=False,
+                    residual, rank=rank_specific[k], max_iter=n_iter_inner,
+                    verbose=bool(verbose), progress=show_progress_inner,
                     w_init=W_s_prev, h_init=H_s_prev  # PASS PREVIOUS SOLUTIONS
                 )
                 
@@ -204,6 +221,9 @@ class GPUCSMFSolver:
             if verbose and (outer_iter + 1) % 5 == 0:
                 print(f"Iteration {outer_iter + 1:3d}: obj = {obj:.6e}, time = {elapsed:.3f}s")
         
+        if outer_bar is not None:
+            outer_bar.close()
+
         total_time = time.time() - start_time
         
         if verbose:
@@ -225,6 +245,8 @@ def gpu_csmf(
     rank_specific: Union[int, List[int]],
     device: Optional[torch.device] = None,
     verbose: int = 0,
+    show_progress: bool = False,
+    show_progress_inner: bool = False,
     **kwargs
 ) -> Dict:
     """
@@ -242,6 +264,10 @@ def gpu_csmf(
         GPU device (auto-selected if None)
     verbose : int
         Verbosity level
+    show_progress : bool
+        Whether to show the outer CSMF tqdm progress bars (requires `tqdm`)
+    show_progress_inner : bool
+        Whether to show the inner NMF progress bars (each call to `GPUNeNMFSolver.nmf`)
     **kwargs
         Additional arguments passed to GPUCSMFSolver.fit
         
@@ -269,6 +295,8 @@ def gpu_csmf(
         rank_common=rank_common,
         rank_specific=rank_specific,
         verbose=verbose,
+        show_progress=show_progress,
+        show_progress_inner=show_progress_inner,
         **kwargs
     )
     
