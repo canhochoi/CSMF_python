@@ -11,6 +11,18 @@ from .evaluation import (
     compute_accuracy,
     normalize_factors,
 )
+from .rank_selection import (
+    amari_distance,
+    stability_between_solutions,
+    compute_pairwise_stability,
+    rank_stability_score,
+    nenmf_rank_sweep_per_dataset,
+    analyze_stability_per_dataset,
+    find_optimal_ranks,
+    select_best_factorization,
+    learn_common_specific_ranks_from_correlations,
+    rank_selection_pipeline,
+)
 
 __all__ = [
     'get_stop_criterion',
@@ -20,4 +32,15 @@ __all__ = [
     'matrix_similarity',
     'compute_accuracy',
     'normalize_factors',
+    # Rank selection (MATLAB-matched implementation)
+    'amari_distance',
+    'stability_between_solutions',
+    'compute_pairwise_stability',
+    'rank_stability_score',
+    'nenmf_rank_sweep_per_dataset',
+    'analyze_stability_per_dataset',
+    'find_optimal_ranks',
+    'select_best_factorization',
+    'learn_common_specific_ranks_from_correlations',
+    'rank_selection_pipeline',
 ]

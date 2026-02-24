@@ -133,6 +133,17 @@ __all__ = [
     'csmf',
     'inmf',
     'jnmf',
+    # Rank selection (MATLAB-matched implementation)
+    'amari_distance',
+    'stability_between_solutions',
+    'compute_pairwise_stability',
+    'rank_stability_score',
+    'nenmf_rank_sweep_per_dataset',
+    'analyze_stability_per_dataset',
+    'find_optimal_ranks',
+    'select_best_factorization',
+    'learn_common_specific_ranks_from_correlations',
+    'rank_selection_pipeline',
     # Utilities
     'hungarian',
     'get_stop_criterion',
@@ -156,6 +167,18 @@ from .utils.evaluation import (
     sparsity,
     matrix_similarity,
     compute_accuracy,
+)
+from .utils.rank_selection import (
+    amari_distance,
+    stability_between_solutions,
+    compute_pairwise_stability,
+    rank_stability_score,
+    nenmf_rank_sweep_per_dataset,
+    analyze_stability_per_dataset,
+    find_optimal_ranks,
+    select_best_factorization,
+    learn_common_specific_ranks_from_correlations,
+    rank_selection_pipeline,
 )
 
 # Optional GPU module import (graceful degradation if PyTorch not installed)
