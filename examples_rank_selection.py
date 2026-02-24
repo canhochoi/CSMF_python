@@ -39,6 +39,7 @@ from typing import Tuple, List, Dict, Optional
 from scipy.optimize import linear_sum_assignment
 from csmf import csmf
 from csmf.utils.rank_selection import rank_selection_pipeline
+from csmf.utils.rank_selection_svd import rank_selection_svd_pipeline
 from csmf.utils.evaluation import compute_reconstruction_error
 
 
@@ -320,6 +321,117 @@ def create_scatter_plots(W_true: np.ndarray, W_inferred: np.ndarray,
     plt.savefig(filename, dpi=150, bbox_inches='tight')
     print(f"  ✓ Saved: {filename}")
     plt.close()
+
+
+def run_svd_pipeline_example():
+    """
+    Example using SVD-based 'elbow' method for initial rank estimation.
+    This is a faster alternative to the NeNMF stability analysis.
+    """
+    print("\n" + "="*70)
+    print("CSMF PIPELINE WITH SVD-BASED RANK SELECTION")
+    print("="*70)
+
+    # Step 0: Generate the same synthetic data
+    print("\nStep 0: Generating synthetic multi-dataset with ground truth factors...")
+    data = ajive_data_sim(K=3, rank_J=3, rank_A=[2, 2, 2], n=100, p_k=[50, 60, 40], noise=0.05)
+    X_datasets = data['X_datasets']
+    X = np.hstack(X_datasets)
+    vec_n = [X_ds.shape[1] for X_ds in X_datasets]
+    ground_truth_ranks = [data['rank_J']] + data['rank_A']
+    
+    print(f"  Datasets: {[X_ds.shape for X_ds in X_datasets]}")
+    print(f"  Ground truth ranks: {ground_truth_ranks}")
+
+    # Step 1: Automatic rank selection using SVD
+    print("\n" + "-"*70)
+    print("Step 1: Automatic rank selection (SVD-based implementation)...")
+    
+    vec_para, analysis = rank_selection_svd_pipeline(
+        X_datasets,
+        correlations_cutoff=0.75,
+        verbose=1
+    )
+
+    print(f"\n  Detected ranks: {vec_para}")
+    print(f"  Expected ranks: {ground_truth_ranks}")
+
+    # Explain the decomposition
+    print(f"\n  Rank Decomposition Explanation:")
+    print(f"    - Per-dataset initial optimal ranks (from SVD elbow): {list(analysis['optimal_ranks'].values())}")
+    print(f"    - Final decomposition: {vec_para}")
+    # Guard against common rank of 0
+    if vec_para[0] == 0:
+        print("\n  WARNING: Common rank is 0 - no correlated factors detected.")
+        print("  Forcing common rank to 1 to allow CSMF to proceed.")
+        vec_para = [1] + vec_para[1:]
+    # Step 2: Run CSMF with detected ranks
+    print("\n" + "-"*70)
+    print("Step 2: Running CSMF with SVD-detected ranks...")
+    
+    W, H, _, _, _ = csmf(X, vec_n=vec_n, vec_para=vec_para, iter_outer=100, max_iter_nenm=200, verbose=1)
+    error = compute_reconstruction_error(X, W, H)
+    print(f"  Reconstruction error: {error:.6f}")
+
+    # Step 3: Create visualizations
+    print("\n" + "-"*70)
+    print("Step 3: Creating SVD validation plots...")
+
+    # Plot scree plots
+    fig, axes = plt.subplots(1, len(X_datasets), figsize=(15, 4))
+    fig.suptitle("SVD Scree Plots for Initial Rank Estimation", fontsize=14, fontweight='bold')
+    for i, (singular_values, elbow) in enumerate(zip(analysis['singular_values'].values(), analysis['optimal_ranks'].values())):
+        ax = axes[i]
+        ax.plot(range(1, len(singular_values) + 1), singular_values, 'b-o', label='Singular Values')
+        ax.axvline(elbow, color='r', linestyle='--', label=f'Detected Elbow: {elbow}')
+        ax.set_title(f'Dataset {i+1}')
+        ax.set_xlabel('Component')
+        ax.set_ylabel('Singular Value')
+        ax.grid(True, alpha=0.4)
+        ax.legend()
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    svd_plot_filename = 'outputs/rank_selection_svd_scree_plots.png'
+    plt.savefig(svd_plot_filename, dpi=150)
+    print(f"  ✓ Saved: {svd_plot_filename}")
+    plt.close()
+
+    # Plot factor recovery for common factors
+    r_common = vec_para[0]
+    r_specific = vec_para[1:]
+    W_common_inferred = W[:, :r_common]
+    W_common_true = data['W_common_true']
+    if r_common > 0 and W_common_true.shape[1] > 0:
+        r_min = min(r_common, W_common_true.shape[1])
+        W_common_aligned, _ = align_and_scale_factors(
+            W_common_true[:, :r_min], W_common_inferred[:, :r_min]
+        )
+        create_scatter_plots(
+            W_common_true[:, :r_min],
+            W_common_aligned,
+            title=f"SVD Method: Common Factor Recovery (Inferred Rank={r_common}, True Rank={ground_truth_ranks[0]})",
+            filename="outputs/rank_selection_svd_common_factors.png"
+        )
+
+    # Plot factor recovery for specific factors
+    for k in range(len(r_specific)):
+        r_s = r_specific[k]
+        if r_s > 0:
+            start = r_common + sum(r_specific[:k])
+            end = start + r_s
+            W_specific_inferred = W[:, start:end]
+            W_specific_true = data['W_specific_true'][k]
+            if W_specific_true.shape[1] > 0:
+                r_s_min = min(r_s, W_specific_true.shape[1])
+                W_specific_aligned, _ = align_and_scale_factors(
+                    W_specific_true[:, :r_s_min], W_specific_inferred[:, :r_s_min]
+                )
+                create_scatter_plots(
+                    W_specific_true[:, :r_s_min],
+                    W_specific_aligned,
+                    title=f"SVD Method: Specific Factors DS{k+1} (Inferred Rank={r_s}, True Rank={ground_truth_ranks[k+1]})",
+                    filename=f"outputs/rank_selection_svd_specific_factors_ds{k+1}.png"
+                )
 
 
 def full_pipeline_example():
@@ -672,15 +784,23 @@ def full_pipeline_example():
 
 
 if __name__ == "__main__":
-    results = full_pipeline_example()
+    # Run the original stability-based pipeline
+    results_stability = full_pipeline_example()
+
+    # Run the new SVD-based pipeline
+    run_svd_pipeline_example()
     
     print("\n" + "="*70)
-    print("✓ Pipeline Complete!")
+    print("✓ All Pipelines Complete!")
     print("="*70)
-    print("\nGenerated files:")
+    print("\nGenerated files from Stability-based method:")
     print("  - outputs/stability_curves.png (4 subplots: common + 3 dataset-specific)")
     print("  - outputs/scatter_common_factors.png (using INFERRED rank)")
     print("  - outputs/scatter_common_factors_validation.png (using CORRECT rank)")
     print("  - outputs/scatter_specific_factors_ds*.png (using INFERRED ranks)")
     print("  - outputs/scatter_specific_factors_ds*_validation.png (using CORRECT ranks)")
+    print("\nGenerated files from SVD-based method:")
+    print("  - outputs/rank_selection_svd_scree_plots.png")
+    print("  - outputs/rank_selection_svd_common_factors.png")
+    print("  - outputs/rank_selection_svd_specific_factors_ds*.png")
 
