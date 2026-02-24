@@ -42,6 +42,116 @@ from csmf.utils.rank_selection import rank_selection_pipeline
 from csmf.utils.evaluation import compute_reconstruction_error
 
 
+def sim_dist(dist_type: int, n: int, p: int) -> np.ndarray:
+    """
+    Generate random matrix from specified distribution.
+    
+    Parameters
+    ----------
+    dist_type : int
+        1 for normal, 2 for uniform, 3 for exponential
+    n : int
+        Number of rows
+    p : int
+        Number of columns
+    
+    Returns
+    -------
+    np.ndarray
+        Matrix of shape (n, p) from specified distribution
+    """
+    if dist_type == 1:
+        return np.random.randn(n, p)
+    elif dist_type == 2:
+        return np.random.uniform(0, 1, (n, p))
+    elif dist_type == 3:
+        return np.random.exponential(1, (n, p))
+    else:
+        raise ValueError(f"Unknown distribution type: {dist_type}")
+
+
+def ajive_data_sim(K: int = 3, rank_J: int = 2, rank_A: List[int] = None,
+                   n: int = 100, p_k: List[int] = None, 
+                   dist_type: int = 1, noise: float = 0.1) -> Dict:
+    """
+    Simulation of data blocks with joint (common) and individual (specific) structures.
+    
+    Based on AJIVE (Angle-based Joint and Individual Variation Explained) data generation.
+    
+    Parameters
+    ----------
+    K : int
+        Number of data blocks
+    rank_J : int
+        Joint (common) rank
+    rank_A : List[int]
+        Individual (specific) ranks for each block
+    n : int
+        Number of observations
+    p_k : List[int]
+        Number of variables in each block
+    dist_type : int
+        1 for normal, 2 for uniform, 3 for exponential
+    noise : float
+        Standard deviation of noise
+    
+    Returns
+    -------
+    Dict containing:
+        - X_datasets: List of data matrices X_k = J[columns] + A_k + noise
+        - W_common_true: Common factor matrix
+        - W_specific_true: List of specific factor matrices
+        - rank_J: True common rank
+        - rank_A: True specific ranks
+    """
+    if rank_A is None:
+        rank_A = [2] * K
+    if p_k is None:
+        p_k = [20] * K
+    
+    p = sum(p_k)
+    
+    # Generate joint (common) factors using absolute values for non-negativity
+    S_joint = np.abs(sim_dist(dist_type, n, rank_J))  # n × rank_J (non-negative)
+    U_joint = np.abs(sim_dist(dist_type, rank_J, p))  # rank_J × p (non-negative)
+    J = S_joint @ U_joint  # n × p (joint structure across all variables)
+    
+    # Generate individual (specific) factors for each block
+    X_datasets = []
+    A_true = []
+    
+    col_idx = 0
+    for k in range(K):
+        rank_A_k = rank_A[k]
+        p_k_val = p_k[k]
+        
+        # Individual factors for this block (non-negative)
+        S_individual = np.abs(sim_dist(dist_type, n, rank_A_k))  # n × rank_A_k (non-negative)
+        W_individual = np.abs(sim_dist(dist_type, rank_A_k, p_k_val))  # rank_A_k × p_k (non-negative)
+        A_k = S_individual @ W_individual  # n × p_k
+        A_true.append(A_k)
+        
+        # Extract joint factors for this block's variables
+        J_k = J[:, col_idx:col_idx + p_k_val]  # n × p_k
+        
+        # Combine: data = joint + individual + noise
+        # Use non-negative noise to keep data non-negative
+        noise_k = np.abs(np.random.normal(0, noise, (n, p_k_val)))
+        X_k = J_k + A_k + noise_k
+        X_datasets.append(X_k)
+        
+        col_idx += p_k_val
+    
+    # Return in format compatible with CSMF
+    return {
+        'X_datasets': X_datasets,
+        'W_common_true': S_joint,  # Common factor loadings (n × rank_J)
+        'W_specific_true': [A_true[k][:, :rank_A[k]] for k in range(K)],  # Specific factor scores
+        'rank_J': rank_J,
+        'rank_A': rank_A,
+    }
+
+
 def generate_synthetic_csmf_data(
     n_features: int = 100,
     n_samples: List[int] = None,
@@ -222,19 +332,22 @@ def full_pipeline_example():
     
     # Step 0: Generate synthetic data with ground truth
     print("\nStep 0: Generating synthetic multi-dataset with ground truth factors...")
-    data = generate_synthetic_csmf_data(
-        n_features=100,
-        n_samples=[50, 60, 40],
-        rank_common=3,
-        rank_specific=[2, 2, 2],
-        noise=0.05,
-        signal_separation=10.0  # Common factors 10x stronger: maximum rank signal clarity
+    
+    # Use AJIVE-style data generation (joint + individual + noise structure)
+    data = ajive_data_sim(
+        K=3,  # 3 datasets
+        rank_J=3,  # Common rank
+        rank_A=[2, 2, 2],  # Specific ranks
+        n=100,  # Observations
+        p_k=[50, 60, 40],  # Variables per dataset
+        dist_type=1,  # Normal distribution
+        noise=0.05
     )
     
     X_datasets = data['X_datasets']
     X = np.hstack(X_datasets)
     vec_n = [X_ds.shape[1] for X_ds in X_datasets]
-    ground_truth_ranks = data['ground_truth_ranks']
+    ground_truth_ranks = [data['rank_J']] + data['rank_A']
     
     print(f"  Datasets: {[X_ds.shape for X_ds in X_datasets]}")
     print(f"  Ground truth ranks: {ground_truth_ranks}")
@@ -257,6 +370,17 @@ def full_pipeline_example():
     
     print(f"\n  Detected ranks: {vec_para}")
     print(f"  Expected ranks: {ground_truth_ranks}")
+    
+    # Explain the decomposition: how per-dataset ranks relate to common/specific
+    print(f"\n  Rank Decomposition Explanation:")
+    print(f"    - Per-dataset initial optimal ranks: {list(analysis['optimal_ranks'].values())}")
+    print(f"    - Final decomposition: {vec_para}")
+    print(f"      * Common rank: {vec_para[0]}")
+    print(f"      * Specific ranks: {vec_para[1:]}")
+    for k in range(len(X_datasets)):
+        total_rank = vec_para[0] + vec_para[k+1]
+        initial_rank = analysis['optimal_ranks'][k]
+        print(f"      * Dataset {k+1}: {vec_para[0]} (common) + {vec_para[k+1]} (specific) = {total_rank} (vs initial {initial_rank})")
     
     # Handle case where common rank is 0 (no correlated factors found)
     if vec_para[0] == 0:
@@ -423,9 +547,11 @@ def full_pipeline_example():
                 W_specific_aligned, _ = align_and_scale_factors(
                     W_specific_true_truncated, W_specific_inferred_truncated
                 )
+                # Show decomposition: total rank = common + specific
+                total_rank = r_common + r_s
                 create_scatter_plots(
                     W_specific_true_truncated, W_specific_aligned,
-                    f'Specific Factors - Dataset {k+1} (using rank={r_s}, true rank={W_specific_true.shape[1]})',
+                    f'Specific Factors - Dataset {k+1} ([common={r_common} + specific={r_s} = {total_rank}], true rank={W_specific_true.shape[1]})',
                     f'outputs/scatter_specific_factors_ds{k+1}.png',
                     ground_truth_rank=ground_truth_ranks[k+1]
                 )
@@ -519,9 +645,10 @@ def full_pipeline_example():
             
             if W_specific_true.shape[1] > 0:
                 W_specific_aligned, _ = align_and_scale_factors(W_specific_true, W_specific_inferred)
+                total_rank = ground_truth_ranks[0] + r_true
                 create_scatter_plots(
                     W_specific_true, W_specific_aligned,
-                    f'Specific Factors - Dataset {k+1} (using rank={r_true}, true rank={r_true})',
+                    f'Specific Factors - Dataset {k+1} ([common={ground_truth_ranks[0]} + specific={r_true} = {total_rank}], true rank={r_true})',
                     f'outputs/scatter_specific_factors_ds{k+1}_validation.png',
                     ground_truth_rank=r_true
                 )
