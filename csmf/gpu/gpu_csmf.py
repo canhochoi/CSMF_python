@@ -108,7 +108,7 @@ class GPUCSMFSolver:
             n_k = X_list[k].shape[1]
             H_s_list.append(np.random.rand(rank_specific[k], n_k))
         
-        history = {'obj': [], 'time': []}
+        history = {'obj': [], 'time': [], 'per_dataset_obj': []}
         
         # Main CSMF loop
         use_outer_bar = show_progress and tqdm is not None
@@ -203,6 +203,7 @@ class GPUCSMFSolver:
             
             # Compute objective
             obj = 0
+            per_dataset_errors = []
             for k in range(K):
                 X_k = X_list[k]
                 # Convert sparse matrix to dense
@@ -210,16 +211,22 @@ class GPUCSMFSolver:
                     X_k = X_k.toarray()
                 elif not isinstance(X_k, np.ndarray):
                     X_k = np.asarray(X_k)
-                
+
                 recon = W_c @ H_c_list[k] + W_s[k] @ H_s_list[k]
-                obj += np.sum((X_k - recon) ** 2)
+                diff = X_k - recon
+                err = np.sum(diff ** 2)
+                obj += err
+                per_dataset_errors.append(err)
             
             elapsed = time.time() - iter_start
             history['obj'].append(obj)
+            history['per_dataset_obj'].append(per_dataset_errors)
             history['time'].append(elapsed)
             
             if verbose and (outer_iter + 1) % 5 == 0:
-                print(f"Iteration {outer_iter + 1:3d}: obj = {obj:.6e}, time = {elapsed:.3f}s")
+                per_str = ', '.join(f"{err:.3e}" for err in per_dataset_errors)
+                print(f"Iteration {outer_iter + 1:3d}: obj = {obj:.6e}, time = {elapsed:.3f}s", end='')
+                print(f"; per dataset: [{per_str}]")
         
         if outer_bar is not None:
             outer_bar.close()
